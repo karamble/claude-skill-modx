@@ -503,6 +503,7 @@ function fullResource(\MODX\Revolution\modX $modx, \MODX\Revolution\modResource 
         'content_dispo' => $r->get('content_dispo'),
         'published'     => (bool) $r->get('published'),
         'publishedon'   => $r->get('publishedon'),
+        'publishedby'   => $r->get('publishedby'),
         'pub_date'      => $r->get('pub_date'),
         'unpub_date'    => $r->get('unpub_date'),
         'hidemenu'      => (bool) $r->get('hidemenu'),
