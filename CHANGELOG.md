@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file. The format 
 ### Fixed
 
 - `deploy-bridge.sh`: `ssh_run()` and `scp_to()` referenced `$1` / `$2` *after* `set --` had already replaced the positional parameters with the `ssh`/`scp` command and its flags. As a result, the SSH smoke check ran `ssh` as the remote command (exit 255, surfaced as "SSH connection ... failed") and `scp_to` would have uploaded the wrong paths. Both functions now snapshot their arguments into locals before the first `set --`.
+- `resource_get` silently dropped TV values for TVs not formally assigned to the resource's template via `modTemplateVarTemplate`, because `fullResource()` only iterated `$r->getTemplateVars()`. This hid "floating" TVs that store values directly on a resource, most notably Babel's `babelLanguageLinks`, making a successful `tv_setvalue` look like it had silently failed. `fullResource()` now does a second pass over `modTemplateVarResource` rows for the resource id and merges any un-seen TV values into the response.
 
 ## [0.1.0] - 2026-04-09
 

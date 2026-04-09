@@ -497,8 +497,25 @@ function fullResource(\MODX\Revolution\modX $modx, \MODX\Revolution\modResource 
         $data['content'] = $r->get('content');
     }
     $tvs = [];
+    $seen = [];
     foreach ($r->getTemplateVars() as $tv) {
         $tvs[$tv->get('name')] = $tv->getValue($r->get('id'));
+        $seen[(int) $tv->get('id')] = true;
+    }
+    // Second pass: catch "floating" TVs that have a value stored for this
+    // resource but are not formally assigned to the resource's template.
+    // Some MODX extras (notably Babel with its babelLanguageLinks TV) store
+    // TV values directly on resources without a template assignment, and
+    // relying on getTemplateVars() alone silently drops them from the output.
+    $q = $modx->newQuery(\MODX\Revolution\modTemplateVarResource::class);
+    $q->where(['contentid' => $r->get('id')]);
+    foreach ($modx->getIterator(\MODX\Revolution\modTemplateVarResource::class, $q) as $tvr) {
+        $tvid = (int) $tvr->get('tmplvarid');
+        if (isset($seen[$tvid])) continue;
+        $tv = $modx->getObject(\MODX\Revolution\modTemplateVar::class, $tvid);
+        if (!$tv) continue;
+        $tvs[$tv->get('name')] = $tvr->get('value');
+        $seen[$tvid] = true;
     }
     $data['tvs'] = $tvs;
     return $data;

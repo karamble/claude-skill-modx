@@ -150,6 +150,8 @@ Fetch a single resource with all metadata and template variable values.
 
 The `class_key` field tells you whether the resource is a plain document or belongs to an extra like Collections (`Collections\Model\CollectionContainer`). The `show_in_tree` field is significant on sites using the Collections extra; see `troubleshooting.md`.
 
+The `tvs` object contains every TV that has a value for this resource: TVs formally assigned to the resource's template (via `modTemplateVarTemplate`) AND "floating" TVs that store values directly on the resource without a template assignment. The latter pattern is used by extras like Babel, which writes `babelLanguageLinks` (or whatever `babel.babelTvName` points to) on every translated resource.
+
 ---
 
 ### `resource_create`
