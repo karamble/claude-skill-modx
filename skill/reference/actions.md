@@ -288,13 +288,19 @@ List all chunks with id, name, description, and category.
 Fetch a chunk's full content and metadata.
 
 **Request keys:**
-| Key | Required | Type |
-|---|---|---|
-| `name` | required | string |
+| Key | Required | Type | Notes |
+|---|---|---|---|
+| `id` | one of | int | Chunk id. |
+| `name` | one of | string | Chunk name. |
 
 **Request:**
 ```json
 {"action": "chunk_get", "name": "headerMenu"}
+```
+
+Or by id:
+```json
+{"action": "chunk_get", "id": 12}
 ```
 
 **Response:**
@@ -374,9 +380,20 @@ List all templates with id, name, description, and category.
 ### `template_get`
 
 **Request keys:**
-| Key | Required | Type |
-|---|---|---|
-| `name` | required | int or string (id or template name) |
+| Key | Required | Type | Notes |
+|---|---|---|---|
+| `id` | one of | int | Template id. |
+| `name` | one of | string | Template name (`templatename` column). |
+
+**Request:**
+```json
+{"action": "template_get", "name": "BlogArticle"}
+```
+
+Or by id:
+```json
+{"action": "template_get", "id": 4}
+```
 
 **Response:** `{id, templatename, description, category, content}`
 
@@ -419,9 +436,10 @@ Lists all TVs with id, name, caption, and type.
 Fetches a TV's full metadata including which templates it is assigned to.
 
 **Request keys:**
-| Key | Required | Type |
-|---|---|---|
-| `name` | required | string |
+| Key | Required | Type | Notes |
+|---|---|---|---|
+| `id` | one of | int | TV id. |
+| `name` | one of | string | TV name. |
 
 **Response:**
 ```json
@@ -525,7 +543,7 @@ Set a specific TV value on a specific resource.
 
 ### `snippet_list`, `snippet_get`, `snippet_create` / `snippet_update`, `snippet_delete`
 
-Identical shape to chunks. Snippet `content` is PHP source code. Run `cache_clear` after any change.
+Identical shape to chunks. `snippet_get` accepts either `id` or `name` (same as `chunk_get`). Snippet `content` is PHP source code. Run `cache_clear` after any change.
 
 ---
 

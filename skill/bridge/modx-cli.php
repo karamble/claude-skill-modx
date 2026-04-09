@@ -162,7 +162,8 @@ function dispatch(\MODX\Revolution\modX $modx, string $action, array $cmd)
             return listElements($modx, \MODX\Revolution\modChunk::class, 'name');
 
         case 'chunk_get':
-            $c = $modx->getObject(\MODX\Revolution\modChunk::class, ['name' => $cmd['name']]);
+            $c = loadElement($modx, \MODX\Revolution\modChunk::class, 'name', $cmd);
+            if ($c === false) return ['error' => 'missing id or name'];
             if (!$c) return ['error' => 'chunk not found'];
             return chunkToArray($modx, $c);
 
@@ -202,7 +203,9 @@ function dispatch(\MODX\Revolution\modX $modx, string $action, array $cmd)
             return $out;
 
         case 'template_get':
-            $t = resolveTemplate($modx, $cmd['name']);
+            $ref = $cmd['id'] ?? $cmd['name'] ?? null;
+            if ($ref === null) return ['error' => 'missing id or name'];
+            $t = resolveTemplate($modx, $ref);
             if (!$t) return ['error' => 'template not found'];
             return [
                 'id'           => $t->get('id'),
@@ -248,7 +251,8 @@ function dispatch(\MODX\Revolution\modX $modx, string $action, array $cmd)
             return $out;
 
         case 'tv_get':
-            $tv = $modx->getObject(\MODX\Revolution\modTemplateVar::class, ['name' => $cmd['name']]);
+            $tv = loadElement($modx, \MODX\Revolution\modTemplateVar::class, 'name', $cmd);
+            if ($tv === false) return ['error' => 'missing id or name'];
             if (!$tv) return ['error' => 'tv not found'];
             $links = $modx->getCollection(\MODX\Revolution\modTemplateVarTemplate::class, ['tmplvarid' => $tv->get('id')]);
             $templates = [];
@@ -339,7 +343,8 @@ function dispatch(\MODX\Revolution\modX $modx, string $action, array $cmd)
             return listElements($modx, \MODX\Revolution\modSnippet::class, 'name');
 
         case 'snippet_get':
-            $s = $modx->getObject(\MODX\Revolution\modSnippet::class, ['name' => $cmd['name']]);
+            $s = loadElement($modx, \MODX\Revolution\modSnippet::class, 'name', $cmd);
+            if ($s === false) return ['error' => 'missing id or name'];
             if (!$s) return ['error' => 'snippet not found'];
             return [
                 'id'          => $s->get('id'),
@@ -550,6 +555,32 @@ function resolveTemplate(\MODX\Revolution\modX $modx, $ref)
         return $modx->getObject(\MODX\Revolution\modTemplate::class, (int) $ref);
     }
     return $modx->getObject(\MODX\Revolution\modTemplate::class, ['templatename' => $ref]);
+}
+
+/**
+ * Look up a MODX element by either numeric primary key or string name.
+ *
+ * Accepts payloads with either an "id" key (numeric PK lookup) or a "name"
+ * key (string lookup on the element's name column). Returns:
+ *   - the element object if found
+ *   - null if id/name was provided but no match exists
+ *   - false if neither id nor name was provided (caller should return a
+ *     "missing id or name" error so the CLI user gets an actionable message
+ *     instead of a silent "not found")
+ *
+ * Used by the *_get dispatchers for chunks, snippets, and TVs. templates
+ * have their own resolveTemplate() helper because their name column is
+ * "templatename" rather than "name" and it is also used by tv_assign_template.
+ */
+function loadElement(\MODX\Revolution\modX $modx, string $class, string $nameField, array $cmd)
+{
+    if (!empty($cmd['id'])) {
+        return $modx->getObject($class, (int) $cmd['id']);
+    }
+    if (!empty($cmd['name'])) {
+        return $modx->getObject($class, [$nameField => $cmd['name']]);
+    }
+    return false;
 }
 
 function resolveCategoryId(\MODX\Revolution\modX $modx, $ref): int
