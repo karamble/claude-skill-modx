@@ -131,7 +131,13 @@ function dispatch(\MODX\Revolution\modX $modx, string $action, array $cmd)
 
         case 'resource_create':
             $r = $modx->newObject(\MODX\Revolution\modResource::class);
-            applyResourceFields($modx, $r, $cmd['fields'] ?? []);
+            $fields = $cmd['fields'] ?? [];
+            applyResourceFields($modx, $r, $fields);
+            // Mirror the MODX Manager Create processor: when creating a
+            // resource in the published state, auto-set publishedon and
+            // publishedby unless the caller passed explicit values.
+            // See core/src/Revolution/Processors/Resource/Create.php.
+            autoManagePublishedTimestamps($modx, $r, $fields, false, !empty($fields['published']));
             if (!$r->save()) return ['error' => 'save failed'];
             if (!empty($cmd['tvs'])) setResourceTvs($modx, $r, $cmd['tvs']);
             return ['ok' => true, 'id' => $r->get('id'), 'alias' => $r->get('alias')];
@@ -139,7 +145,19 @@ function dispatch(\MODX\Revolution\modX $modx, string $action, array $cmd)
         case 'resource_update':
             $r = loadResource($modx, $cmd);
             if (!$r) return ['error' => 'resource not found'];
-            if (!empty($cmd['fields'])) applyResourceFields($modx, $r, $cmd['fields']);
+            $wasPublished = (bool) $r->get('published');
+            $fields = $cmd['fields'] ?? [];
+            if (!empty($fields)) applyResourceFields($modx, $r, $fields);
+            // Mirror the MODX Manager Publish / Unpublish processors: when
+            // the published state flips, auto-manage publishedon and
+            // publishedby unless the caller passed explicit values in the
+            // same request. No transition = fields untouched.
+            // See core/src/Revolution/Processors/Resource/Publish.php and
+            // core/src/Revolution/Processors/Resource/Unpublish.php.
+            $isPublished = (bool) $r->get('published');
+            if ($wasPublished !== $isPublished) {
+                autoManagePublishedTimestamps($modx, $r, $fields, $wasPublished, $isPublished);
+            }
             if (!$r->save()) return ['error' => 'save failed'];
             if (!empty($cmd['tvs'])) setResourceTvs($modx, $r, $cmd['tvs']);
             return ['ok' => true, 'id' => $r->get('id'), 'alias' => $r->get('alias')];
@@ -546,6 +564,48 @@ function setResourceTvs(\MODX\Revolution\modX $modx, \MODX\Revolution\modResourc
         if (is_array($value)) $value = json_encode($value, JSON_UNESCAPED_SLASHES);
         $tv->setValue($r->get('id'), $value);
         $tv->save();
+    }
+}
+
+/**
+ * Mirror the MODX Manager Publish / Unpublish / Create processor behavior
+ * for publishedon and publishedby.
+ *
+ * MODX core puts the auto-set logic for these fields in the Manager
+ * processors, not in modResource::save(). Any code path that calls save()
+ * directly on the domain object bypasses it entirely, which is how the
+ * bridge ended up publishing resources with publishedon=0 and quietly
+ * breaking date-sorted listings. This helper replicates the processor
+ * behavior defensively: an explicit caller-provided value always wins,
+ * and the helper only fills in fields the caller omitted.
+ *
+ * Called by resource_create (wasPublished=false) and by resource_update
+ * only when a published-state transition was actually detected.
+ */
+function autoManagePublishedTimestamps(
+    \MODX\Revolution\modX $modx,
+    \MODX\Revolution\modResource $r,
+    array $fields,
+    bool $wasPublished,
+    bool $isPublished
+): void {
+    if ($isPublished && !$wasPublished) {
+        // 0 -> 1 transition (or fresh create with published=1).
+        if (!array_key_exists('publishedon', $fields)) {
+            $r->set('publishedon', time());
+        }
+        if (!array_key_exists('publishedby', $fields)) {
+            $u = $modx->getUser();
+            $r->set('publishedby', $u ? (int) $u->get('id') : 0);
+        }
+    } elseif (!$isPublished && $wasPublished) {
+        // 1 -> 0 transition (unpublish).
+        if (!array_key_exists('publishedon', $fields)) {
+            $r->set('publishedon', 0);
+        }
+        if (!array_key_exists('publishedby', $fields)) {
+            $r->set('publishedby', 0);
+        }
     }
 }
 
