@@ -95,20 +95,25 @@ REMOTE_BRIDGE="${WEB_ROOT}/${BRIDGE_PATH}"
 REMOTE_HTACCESS="${REMOTE_DIR}/.htaccess"
 
 ssh_run() {
+    # Save the remote command before `set --` clobbers the positional params.
+    _remote_cmd="$1"
     set -- ssh -p "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new
     if [ -n "$SSH_KEY" ]; then
         set -- "$@" -i "$SSH_KEY"
     fi
-    set -- "$@" "${SSH_USER}@${HOST}" "$1"
+    set -- "$@" "${SSH_USER}@${HOST}" "$_remote_cmd"
     "$@"
 }
 
 scp_to() {
+    # Save src/dst before `set --` clobbers the positional params.
+    _src="$1"
+    _dst="$2"
     set -- scp -P "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new
     if [ -n "$SSH_KEY" ]; then
         set -- "$@" -i "$SSH_KEY"
     fi
-    set -- "$@" "$1" "${SSH_USER}@${HOST}:$2"
+    set -- "$@" "$_src" "${SSH_USER}@${HOST}:$_dst"
     "$@"
 }
 

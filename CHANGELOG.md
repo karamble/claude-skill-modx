@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `deploy-bridge.sh`: `ssh_run()` and `scp_to()` referenced `$1` / `$2` *after* `set --` had already replaced the positional parameters with the `ssh`/`scp` command and its flags. As a result, the SSH smoke check ran `ssh` as the remote command (exit 255, surfaced as "SSH connection ... failed") and `scp_to` would have uploaded the wrong paths. Both functions now snapshot their arguments into locals before the first `set --`.
+
 ## [0.1.0] - 2026-04-09
 
 Initial release.
