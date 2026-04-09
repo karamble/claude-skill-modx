@@ -1,0 +1,17 @@
+# Local site configs, never committed
+*.local.yaml
+*.local.yml
+.modx-site.yaml
+modx-sites/
+
+# Editor and OS cruft
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+/tmp-test-home/
+/test-output/

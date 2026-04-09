@@ -1,0 +1,36 @@
+name: neutrality-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Blocks any PR that references a private site identifier.
+# This keeps the public repo free of hostnames, usernames, or other
+# identifiers that could associate the skill with a specific site.
+#
+# If you need to add a new forbidden string, edit the FORBIDDEN list below.
+
+jobs:
+  neutrality:
+    name: Neutrality check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Grep for forbidden identifiers
+        run: |
+          set -e
+          FORBIDDEN="singularitybyte|urbandigital|web15|web44|client1"
+          if grep -rnE "$FORBIDDEN" \
+              --exclude-dir=.git \
+              --exclude-dir=.github \
+              . ; then
+              echo ""
+              echo "ERROR: forbidden identifier found in repo."
+              echo "This project is kept strictly neutral. Do not reference any specific site."
+              echo "Use example.com, web_user, /var/www/example.com/web, mysite as placeholders."
+              exit 1
+          fi
+          echo "Neutrality check passed."

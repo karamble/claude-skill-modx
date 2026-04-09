@@ -1,0 +1,48 @@
+#!/bin/sh
+# pre-commit hook: neutrality check.
+#
+# Enforces that no commit introduces a reference to a private site identifier.
+# Matches the GitHub Actions neutrality-check workflow exactly so local commits
+# never surprise you on push.
+#
+# To enable:
+#     git config core.hooksPath .githooks
+#     chmod +x .githooks/pre-commit
+
+set -e
+
+FORBIDDEN="singularitybyte|urbandigital|web15|web44|client1"
+
+# Only check files that are staged for commit
+STAGED="$(git diff --cached --name-only --diff-filter=ACM)"
+if [ -z "$STAGED" ]; then
+    exit 0
+fi
+
+# Exclude .git and .github workflow files themselves (they contain the forbidden
+# strings as grep patterns, which is allowed)
+MATCHES=""
+for file in $STAGED; do
+    case "$file" in
+        .github/workflows/neutrality-check.yml) continue ;;
+        .githooks/pre-commit) continue ;;
+    esac
+    if [ -f "$file" ] && grep -lE "$FORBIDDEN" "$file" >/dev/null 2>&1; then
+        MATCHES="$MATCHES $file"
+    fi
+done
+
+if [ -n "$MATCHES" ]; then
+    echo "ERROR: commit blocked by neutrality check."
+    echo "The following staged files contain forbidden identifiers:"
+    for file in $MATCHES; do
+        echo "  - $file"
+        grep -nE "$FORBIDDEN" "$file" | sed 's/^/      /'
+    done
+    echo ""
+    echo "This project is kept strictly neutral. Do not reference any specific site."
+    echo "Use example.com, web_user, /var/www/example.com/web, mysite as placeholders."
+    exit 1
+fi
+
+exit 0

@@ -1,0 +1,31 @@
+# Example MODX site configuration for claude-skill-modx.
+#
+# This file belongs at ~/.config/modx-sites/<alias>.yaml, NOT in your project.
+# In your project directory, drop a small pointer file named .modx-site.yaml
+# containing just one line:
+#
+#     site: mysite
+#
+# When Claude (or invoke.sh) runs from inside that project, it resolves the
+# pointer, loads this registry file, and uses the values below to build the
+# SSH command that talks to the deployed bridge.
+#
+# Only host, ssh_user, php_user, and web_root are required.
+# Everything else has a default.
+
+host: "example.com"
+ssh_user: "root"
+ssh_port: "22"
+# ssh_key: "~/.ssh/id_ed25519"   # uncomment if you do not use the SSH agent
+
+php_user: "web_user"
+php_binary: "/usr/bin/php"
+web_root: "/var/www/example.com/web"
+bridge_path: "cli/modx-cli.php"
+modx_version: "3.x"
+notes: |
+  Free-form notes about this site. Claude may read and surface them when
+  explaining what it is about to do. Examples of useful notes:
+  - "This site uses the Collections extra on the News and Blog parents."
+  - "Content TVs follow the pattern articleimage, tags, spectag."
+  - "Deploys go live immediately; there is no staging environment."
