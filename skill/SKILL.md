@@ -37,6 +37,7 @@ The skill provides four helper scripts at `~/.claude/skills/modx/scripts/`:
 - `detect-site.sh` — resolves which MODX site the current working directory is associated with
 - `invoke.sh` — runs a JSON action against the resolved (or named) site
 - `deploy-bridge.sh` — uploads the bridge PHP file to a configured site
+- `backup-site.sh` — creates a full site backup (files + database) as a tar.gz archive on the server
 - `init-site.sh` — interactive credential collection (users typically don't run this directly; see the first-run flow below)
 
 ### 1. Detect the active site
@@ -127,15 +128,17 @@ This skill also ships a self-contained MODX knowledge library so Claude can writ
 
 Rule: before writing or editing a MODX template, chunk, snippet, or TV, consult the relevant concept reference file. Do not guess tag syntax or naming conventions based on other CMS experience; MODX has its own idioms.
 
-Supported actions (v0.1.0):
+Supported actions (v0.2.0):
 
 - **System:** `ping`, `cache_clear`
+- **Settings:** `setting_get`, `setting_update`, `context_setting_get`, `context_setting_update`
 - **Resources:** `resource_list`, `resource_get`, `resource_create`, `resource_update`, `resource_delete`
 - **Chunks:** `chunk_list`, `chunk_get`, `chunk_create`, `chunk_update`, `chunk_delete`
 - **Templates:** `template_list`, `template_get`, `template_create`, `template_update`, `template_delete`
 - **TVs:** `tv_list`, `tv_get`, `tv_create`, `tv_update`, `tv_delete`, `tv_setvalue`, `tv_assign_template`, `tv_unassign_template`
 - **Snippets:** `snippet_list`, `snippet_get`, `snippet_create`, `snippet_update`, `snippet_delete`
 - **Categories:** `category_list`, `category_create`
+- **Packages:** `package_list`, `package_search`, `package_check_updates`, `package_install`, `package_update`, `package_uninstall`
 - **Imports (ModxTransfer only):** `import_elements`, `import_resources`
 
 ### 5. Error handling
@@ -173,6 +176,7 @@ The following actions require explicit user confirmation before you execute them
 - Any `*_delete` action without the option to soft-delete (`chunk_delete`, `template_delete`, `tv_delete`, `snippet_delete`)
 - `import_elements` or `import_resources` (can overwrite many elements at once)
 - `resource_update` that changes `parent`, `template`, `alias`, or `published` on a production resource
+- `package_install`, `package_update`, `package_uninstall` (can modify database schema, run PHP installers, and change system behavior)
 - Any operation touching more than 10 resources in a single batch
 
 Announce the operation, explain the blast radius, and wait for explicit confirmation. A user saying "go ahead" or "yes" is required; silence or ambiguity is not consent.
@@ -255,4 +259,5 @@ Common problems and fixes live at `reference/troubleshooting.md`. It covers:
 - `scripts/detect-site.sh` — resolves active site
 - `scripts/invoke.sh` — runs JSON actions
 - `scripts/deploy-bridge.sh` — uploads the bridge
+- `scripts/backup-site.sh` — full site backup (files + mysqldump → tar.gz)
 - `scripts/init-site.sh` — interactive init helper for non-Claude users

@@ -24,7 +24,7 @@
  *     not to add privilege.
  *
  * Part of: github.com/karamble/claude-skill-modx
- * Bridge version: 0.1.0
+ * Bridge version: 0.2.0
  */
 
 // ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ function dispatch(\MODX\Revolution\modX $modx, string $action, array $cmd)
         case 'ping':
             return [
                 'ok'             => true,
-                'bridge_version' => '0.1.0',
+                'bridge_version' => '0.2.0',
                 'modx'           => $modx->version['full_version'] ?? 'unknown',
                 'site_name'      => $modx->getOption('site_name'),
                 'base_path'      => MODX_BASE_PATH,
@@ -108,16 +108,86 @@ function dispatch(\MODX\Revolution\modX $modx, string $action, array $cmd)
             $modx->cacheManager->refresh();
             return ['ok' => true, 'cache' => 'refreshed'];
 
+        // ---------- SYSTEM SETTINGS ----------------------------------------
+        case 'setting_get':
+            if (empty($cmd['key'])) return ['error' => 'missing key'];
+            $s = $modx->getObject(\MODX\Revolution\modSystemSetting::class, ['key' => $cmd['key']]);
+            if (!$s) return ['error' => 'setting not found'];
+            return [
+                'key'       => $s->get('key'),
+                'value'     => $s->get('value'),
+                'xtype'     => $s->get('xtype'),
+                'namespace' => $s->get('namespace'),
+                'area'      => $s->get('area'),
+            ];
+
+        case 'setting_update':
+            if (empty($cmd['key'])) return ['error' => 'missing key'];
+            $s = $modx->getObject(\MODX\Revolution\modSystemSetting::class, ['key' => $cmd['key']]);
+            if (!$s) {
+                $s = $modx->newObject(\MODX\Revolution\modSystemSetting::class);
+                $s->set('key', $cmd['key']);
+                if (isset($cmd['xtype']))     $s->set('xtype', $cmd['xtype']);
+                if (isset($cmd['namespace'])) $s->set('namespace', $cmd['namespace']);
+                if (isset($cmd['area']))      $s->set('area', $cmd['area']);
+                $created = true;
+            } else {
+                $created = false;
+            }
+            $s->set('value', $cmd['value'] ?? '');
+            if (!$s->save()) return ['error' => 'save failed'];
+            return ['ok' => true, 'key' => $cmd['key'], 'created' => $created];
+
+        // ---------- CONTEXT SETTINGS ---------------------------------------
+        case 'context_setting_get':
+            if (empty($cmd['context_key']) || empty($cmd['key'])) return ['error' => 'missing context_key or key'];
+            $s = $modx->getObject(\MODX\Revolution\modContextSetting::class, [
+                'context_key' => $cmd['context_key'],
+                'key'         => $cmd['key'],
+            ]);
+            if (!$s) return ['error' => 'context setting not found'];
+            return [
+                'context_key' => $s->get('context_key'),
+                'key'         => $s->get('key'),
+                'value'       => $s->get('value'),
+                'xtype'       => $s->get('xtype'),
+                'namespace'   => $s->get('namespace'),
+                'area'        => $s->get('area'),
+            ];
+
+        case 'context_setting_update':
+            if (empty($cmd['context_key']) || empty($cmd['key'])) return ['error' => 'missing context_key or key'];
+            $s = $modx->getObject(\MODX\Revolution\modContextSetting::class, [
+                'context_key' => $cmd['context_key'],
+                'key'         => $cmd['key'],
+            ]);
+            if (!$s) {
+                $s = $modx->newObject(\MODX\Revolution\modContextSetting::class);
+                $s->set('context_key', $cmd['context_key']);
+                $s->set('key', $cmd['key']);
+                if (isset($cmd['xtype']))     $s->set('xtype', $cmd['xtype']);
+                if (isset($cmd['namespace'])) $s->set('namespace', $cmd['namespace']);
+                if (isset($cmd['area']))      $s->set('area', $cmd['area']);
+                $created = true;
+            } else {
+                $created = false;
+            }
+            $s->set('value', $cmd['value'] ?? '');
+            if (!$s->save()) return ['error' => 'save failed'];
+            return ['ok' => true, 'context_key' => $cmd['context_key'], 'key' => $cmd['key'], 'created' => $created];
+
         // ---------- RESOURCES ----------------------------------------------
         case 'resource_list':
             $q = $modx->newQuery(\MODX\Revolution\modResource::class);
             if (isset($cmd['parent']))   $q->where(['parent' => (int) $cmd['parent']]);
+            if (isset($cmd['context']))  $q->where(['context_key' => $cmd['context']]);
             if (isset($cmd['template'])) {
                 $tpl = resolveTemplate($modx, $cmd['template']);
                 if ($tpl) $q->where(['template' => $tpl->get('id')]);
             }
             if (isset($cmd['published'])) $q->where(['published' => (bool) $cmd['published']]);
             $q->sortby('menuindex', 'ASC');
+            if (isset($cmd['limit'])) $q->limit((int) $cmd['limit']);
             $out = [];
             foreach ($modx->getIterator(\MODX\Revolution\modResource::class, $q) as $r) {
                 $out[] = briefResource($modx, $r);
@@ -127,7 +197,8 @@ function dispatch(\MODX\Revolution\modX $modx, string $action, array $cmd)
         case 'resource_get':
             $r = loadResource($modx, $cmd);
             if (!$r) return ['error' => 'resource not found'];
-            return fullResource($modx, $r, !empty($cmd['include_content']));
+            $includeContent = !isset($cmd['exclude_content']) || !$cmd['exclude_content'];
+            return fullResource($modx, $r, $includeContent);
 
         case 'resource_create':
             $r = $modx->newObject(\MODX\Revolution\modResource::class);
@@ -436,6 +507,132 @@ function dispatch(\MODX\Revolution\modX $modx, string $action, array $cmd)
                 'update'   => $cmd['update'] ?? true,
                 'parentId' => (int) ($cmd['parentId'] ?? 0),
             ]);
+
+        // ---------- PACKAGES -----------------------------------------------
+        case 'package_list':
+            $modx->initialize('mgr');
+            $response = $modx->runProcessor('Workspace/Packages/GetList', []);
+            $data = json_decode($response->getResponse(), true);
+            if (empty($data['results'])) return [];
+            $out = [];
+            foreach ($data['results'] as $pkg) {
+                $out[] = [
+                    'signature'   => $pkg['signature'] ?? '',
+                    'name'        => $pkg['name'] ?? '',
+                    'version'     => $pkg['version'] ?? '',
+                    'release'     => $pkg['release'] ?? '',
+                    'installed'   => $pkg['installed'] ?? '',
+                    'provider'    => (int) ($pkg['provider'] ?? 0),
+                ];
+            }
+            return $out;
+
+        case 'package_check_updates':
+            if (empty($cmd['signature'])) return ['error' => 'missing signature'];
+            $modx->initialize('mgr');
+            $response = $modx->runProcessor('Workspace/Packages/CheckForUpdates', [
+                'signature' => $cmd['signature'],
+            ]);
+            $result = $response->getResponse();
+            if (is_string($result)) $result = json_decode($result, true);
+            if (empty($result['object'])) {
+                return ['ok' => true, 'updates' => [], 'up_to_date' => true];
+            }
+            $updates = [];
+            foreach ($result['object'] as $u) {
+                $updates[] = [
+                    'signature' => $u['signature'] ?? '',
+                    'version'   => $u['version'] ?? '',
+                    'release'   => $u['release'] ?? '',
+                    'changelog' => $u['changelog'] ?? '',
+                    'location'  => $u['location'] ?? '',
+                    'info'      => $u['info'] ?? '',
+                ];
+            }
+            return ['ok' => true, 'updates' => $updates, 'up_to_date' => false];
+
+        case 'package_install':
+            if (empty($cmd['info']) && empty($cmd['signature'])) return ['error' => 'missing info or signature'];
+            $modx->initialize('mgr');
+            // If info URL is provided, download first, then install
+            if (!empty($cmd['info'])) {
+                $dlResponse = $modx->runProcessor('Workspace/Packages/Rest/Download', [
+                    'info'     => $cmd['info'],
+                    'provider' => (int) ($cmd['provider'] ?? 1),
+                ]);
+                $dlResult = $dlResponse->getResponse();
+                if (is_string($dlResult)) $dlResult = json_decode($dlResult, true);
+                if (empty($dlResult['success'])) {
+                    return ['error' => 'download failed', 'details' => $dlResult['message'] ?? ''];
+                }
+                $signature = $dlResult['object']['signature'] ?? ($cmd['signature'] ?? '');
+            } else {
+                $signature = $cmd['signature'];
+            }
+            if (empty($signature)) return ['error' => 'could not determine package signature'];
+            $instResponse = $modx->runProcessor('Workspace/Packages/Install', [
+                'signature' => $signature,
+            ]);
+            $instResult = $instResponse->getResponse();
+            if (is_string($instResult)) $instResult = json_decode($instResult, true);
+            return [
+                'ok'        => !empty($instResult['success']),
+                'signature' => $signature,
+                'message'   => $instResult['message'] ?? '',
+            ];
+
+        case 'package_update':
+            if (empty($cmd['signature'])) return ['error' => 'missing signature'];
+            $modx->initialize('mgr');
+            $response = $modx->runProcessor('Workspace/Packages/Update', [
+                'signature' => $cmd['signature'],
+            ]);
+            $result = $response->getResponse();
+            if (is_string($result)) $result = json_decode($result, true);
+            return [
+                'ok'      => !empty($result['success']),
+                'message' => $result['message'] ?? '',
+                'object'  => $result['object'] ?? null,
+            ];
+
+        case 'package_uninstall':
+            if (empty($cmd['signature'])) return ['error' => 'missing signature'];
+            $modx->initialize('mgr');
+            $response = $modx->runProcessor('Workspace/Packages/Uninstall', [
+                'signature' => $cmd['signature'],
+            ]);
+            $result = $response->getResponse();
+            if (is_string($result)) $result = json_decode($result, true);
+            return [
+                'ok'      => !empty($result['success']),
+                'message' => $result['message'] ?? '',
+            ];
+
+        case 'package_search':
+            if (empty($cmd['query'])) return ['error' => 'missing query'];
+            $modx->initialize('mgr');
+            $response = $modx->runProcessor('Workspace/Packages/Rest/GetList', [
+                'provider' => (int) ($cmd['provider'] ?? 1),
+                'query'    => $cmd['query'],
+                'limit'    => (int) ($cmd['limit'] ?? 10),
+            ]);
+            $data = $response->getResponse();
+            if (is_string($data)) $data = json_decode($data, true);
+            if (empty($data['results'])) return [];
+            $out = [];
+            foreach ($data['results'] as $pkg) {
+                $out[] = [
+                    'id'          => $pkg['id'] ?? '',
+                    'name'        => $pkg['name'] ?? '',
+                    'version'     => $pkg['version'] ?? '',
+                    'release'     => $pkg['release'] ?? '',
+                    'signature'   => ($pkg['name'] ?? '') . '-' . ($pkg['version'] ?? '') . '-' . ($pkg['release'] ?? ''),
+                    'description' => $pkg['description'] ?? '',
+                    'author'      => $pkg['author'] ?? '',
+                    'downloads'   => $pkg['downloads'] ?? 0,
+                ];
+            }
+            return $out;
 
         default:
             return ['error' => 'unknown action: ' . $action];

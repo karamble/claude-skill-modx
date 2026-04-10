@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `resource_get` now includes the `content` field by default. The previous `include_content` opt-in parameter is replaced by `exclude_content` opt-out. Callers that relied on content being absent by default should pass `"exclude_content": true` if they need compact responses.
+
 ### Fixed
 
 - `deploy-bridge.sh`: `ssh_run()` and `scp_to()` referenced `$1` / `$2` *after* `set --` had already replaced the positional parameters with the `ssh`/`scp` command and its flags. As a result, the SSH smoke check ran `ssh` as the remote command (exit 255, surfaced as "SSH connection ... failed") and `scp_to` would have uploaded the wrong paths. Both functions now snapshot their arguments into locals before the first `set --`.
@@ -13,6 +17,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- `setting_get` and `setting_update` actions for reading and writing MODX system settings. `setting_update` creates the setting if it does not exist.
+- `context_setting_get` and `context_setting_update` actions for reading and writing context-level settings. Essential for multilingual sites using Babel (e.g. setting `locale`, `cultureKey`, or `site_url` per context).
+- `package_list`, `package_search`, `package_check_updates`, `package_install`, `package_update`, and `package_uninstall` actions for managing MODX extras via the built-in transport package system. `package_search` queries the modx.com repository. `package_check_updates` returns available updates for an installed package. `package_install` downloads and installs a package. `package_update` updates an installed package to the latest version. All package actions initialize the `mgr` context internally.
+- `resource_list` now accepts `context` (filters by `context_key`) and `limit` (caps result count) parameters.
+- `backup-site.sh` script for creating full site backups (files + database). Reads MODX config for DB credentials, runs `mysqldump --single-transaction`, packs everything into a `/tmp/modx-backup-<alias>-<date>.tar.gz` archive. Supports optional local download via a second argument. Usage: `backup-site.sh [alias] [local-dest]`.
 - `resource_get` now exposes `publishedby` in the full response alongside `createdby` and `editedby`. Previously the field was set correctly on writes but omitted from read-back, which made it impossible to confirm via the bridge whether a publish transition had attributed the correct user without falling back to direct SQL or a server-side PHP script.
 
 ## [0.1.0] - 2026-04-09

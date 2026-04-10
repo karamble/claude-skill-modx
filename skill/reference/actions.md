@@ -24,7 +24,7 @@ Bootstraps MODX and returns bridge and server metadata. Use this for smoke tests
 ```json
 {
   "ok": true,
-  "bridge_version": "0.1.0",
+  "bridge_version": "0.2.0",
   "modx": "3.2.0-pl",
   "site_name": "My Site",
   "base_path": "/var/www/example.com/web/",
@@ -54,6 +54,117 @@ Refreshes the MODX cache. Run this after any chunk, template, TV, or snippet mut
 
 ---
 
+### `setting_get`
+
+Read a MODX system setting by key.
+
+**Request keys:**
+| Key | Required | Type |
+|---|---|---|
+| `key` | required | string |
+
+**Request:**
+```json
+{"action": "setting_get", "key": "site_name"}
+```
+
+**Response:**
+```json
+{
+  "key": "site_name",
+  "value": "My Site",
+  "xtype": "textfield",
+  "namespace": "core",
+  "area": "site"
+}
+```
+
+---
+
+### `setting_update`
+
+Create or update a MODX system setting. If the key does not exist, it is created.
+
+**Request keys:**
+| Key | Required | Type | Notes |
+|---|---|---|---|
+| `key` | required | string | Setting key |
+| `value` | required | string | Setting value |
+| `xtype` | optional | string | Field type (e.g. `textfield`, `combo-boolean`, `numberfield`). Only used on create. |
+| `namespace` | optional | string | Namespace (e.g. `core`, `seosuite`). Only used on create. |
+| `area` | optional | string | Setting area. Only used on create. |
+
+**Request:**
+```json
+{"action": "setting_update", "key": "site_name", "value": "New Name"}
+```
+
+**Response:**
+```json
+{"ok": true, "key": "site_name", "created": false}
+```
+
+After updating settings, run `cache_clear`.
+
+---
+
+### `context_setting_get`
+
+Read a context-level setting.
+
+**Request keys:**
+| Key | Required | Type |
+|---|---|---|
+| `context_key` | required | string |
+| `key` | required | string |
+
+**Request:**
+```json
+{"action": "context_setting_get", "context_key": "de", "key": "locale"}
+```
+
+**Response:**
+```json
+{
+  "context_key": "de",
+  "key": "locale",
+  "value": "de_DE",
+  "xtype": "textfield",
+  "namespace": "core",
+  "area": "language"
+}
+```
+
+---
+
+### `context_setting_update`
+
+Create or update a context-level setting. If the setting does not exist for the given context, it is created.
+
+**Request keys:**
+| Key | Required | Type | Notes |
+|---|---|---|---|
+| `context_key` | required | string | Context key (e.g. `web`, `de`, `en`) |
+| `key` | required | string | Setting key |
+| `value` | required | string | Setting value |
+| `xtype` | optional | string | Field type. Only used on create. |
+| `namespace` | optional | string | Namespace. Only used on create. |
+| `area` | optional | string | Setting area. Only used on create. |
+
+**Request:**
+```json
+{"action": "context_setting_update", "context_key": "de", "key": "locale", "value": "de_DE"}
+```
+
+**Response:**
+```json
+{"ok": true, "context_key": "de", "key": "locale", "created": true}
+```
+
+After updating context settings, run `cache_clear`.
+
+---
+
 ## Resources
 
 ### `resource_list`
@@ -64,8 +175,10 @@ List child resources of a parent, optionally filtered by template or published s
 | Key | Required | Type | Notes |
 |---|---|---|---|
 | `parent` | optional | int | Parent resource id. If omitted, lists top-level resources. |
+| `context` | optional | string | Context key (e.g. `web`, `de`, `en`). Filters by `context_key`. |
 | `template` | optional | int or string | Template id or template name. |
 | `published` | optional | bool | Filter by published state. |
+| `limit` | optional | int | Maximum number of results to return. |
 
 **Request:**
 ```json
@@ -102,12 +215,12 @@ Fetch a single resource with all metadata and template variable values.
 |---|---|---|---|
 | `id` | one of | int | Resource id. |
 | `alias` | one of | string | Resource alias (must be globally unique within its context). |
-| `context` | optional | string | Context key. Defaults to `web`. |
-| `include_content` | optional | bool | If `true`, includes the full `content` body. Default `false` to keep responses small. |
+| `context` | optional | string | Context key. Defaults to `web`. Used with `alias` lookups. |
+| `exclude_content` | optional | bool | If `true`, omits the `content` body from the response. Default `false` — content is always included. |
 
 **Request:**
 ```json
-{"action": "resource_get", "id": 5, "include_content": true}
+{"action": "resource_get", "id": 5}
 ```
 
 **Response:** full resource record including TVs.
@@ -607,3 +720,171 @@ Bulk import resources from a JSON export file.
 | `parentId` | optional | int | Target parent id for imported resources. Default 0. |
 
 **Dangerous.** Same caveats as `import_elements`.
+
+---
+
+## Packages
+
+### `package_list`
+
+List all installed MODX extras with version information.
+
+**Request:**
+```json
+{"action": "package_list"}
+```
+
+**Response:** array of installed packages.
+```json
+[
+  {
+    "signature": "seosuite-3.2.0-pl",
+    "name": "seosuite",
+    "version": "3.2.0",
+    "release": "pl",
+    "installed": "2026-03-25, 20:38",
+    "provider": 1
+  }
+]
+```
+
+---
+
+### `package_search`
+
+Search the MODX extras repository for packages.
+
+**Request keys:**
+| Key | Required | Type | Notes |
+|---|---|---|---|
+| `query` | required | string | Search term |
+| `provider` | optional | int | Provider id. Default `1` (modx.com). |
+| `limit` | optional | int | Max results. Default `10`. |
+
+**Request:**
+```json
+{"action": "package_search", "query": "seosuite"}
+```
+
+**Response:** array of available packages.
+```json
+[
+  {
+    "id": "a17ca68c-e199-443a-81c2-9e5adf75b7f5",
+    "name": "SEO Suite",
+    "version": "3.2.1",
+    "release": "pl",
+    "signature": "SEO Suite-3.2.1-pl",
+    "description": "...",
+    "author": "Sterc",
+    "downloads": 12345
+  }
+]
+```
+
+---
+
+### `package_check_updates`
+
+Check if an installed package has a newer version available.
+
+**Request keys:**
+| Key | Required | Type | Notes |
+|---|---|---|---|
+| `signature` | required | string | Installed package signature (e.g. `seosuite-3.2.0-pl`) |
+
+**Request:**
+```json
+{"action": "package_check_updates", "signature": "seosuite-3.2.0-pl"}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "updates": [
+    {
+      "signature": "seosuite-3.2.1-pl",
+      "version": "3.2.1",
+      "release": "pl",
+      "changelog": "- Fix relation definitions...",
+      "location": "https://rest.modx.com/extras/download/...",
+      "info": "https://rest.modx.com/extras/download/...::seosuite-3.2.1-pl"
+    }
+  ],
+  "up_to_date": false
+}
+```
+
+When no updates are available: `{"ok": true, "updates": [], "up_to_date": true}`
+
+---
+
+### `package_install`
+
+Download and install a package from the repository. Use the `info` URL from `package_check_updates` or `package_search`, or provide a `signature` for a previously downloaded package.
+
+**Request keys:**
+| Key | Required | Type | Notes |
+|---|---|---|---|
+| `info` | one of | string | Download info URL from `package_check_updates` or `package_search` |
+| `signature` | one of | string | Signature of an already-downloaded package |
+| `provider` | optional | int | Provider id. Default `1`. Used with `info`. |
+
+**Request:**
+```json
+{"action": "package_install", "info": "https://rest.modx.com/extras/download/...::seosuite-3.2.1-pl"}
+```
+
+**Response:**
+```json
+{"ok": true, "signature": "seosuite-3.2.1-pl", "message": ""}
+```
+
+**Dangerous.** Installing or updating a package can modify database tables, run PHP installers, and change system behavior. Always confirm with the user before executing.
+
+---
+
+### `package_update`
+
+Update an installed package to the latest available version. This downloads and installs the newest version from the repository.
+
+**Request keys:**
+| Key | Required | Type |
+|---|---|---|
+| `signature` | required | string |
+
+**Request:**
+```json
+{"action": "package_update", "signature": "seosuite-3.2.0-pl"}
+```
+
+**Response:**
+```json
+{"ok": true, "message": ""}
+```
+
+**Dangerous.** Same caveats as `package_install`.
+
+---
+
+### `package_uninstall`
+
+Uninstall a package. This runs the package's uninstall script and removes its components.
+
+**Request keys:**
+| Key | Required | Type |
+|---|---|---|
+| `signature` | required | string |
+
+**Request:**
+```json
+{"action": "package_uninstall", "signature": "seosuite-3.2.0-pl"}
+```
+
+**Response:**
+```json
+{"ok": true, "message": ""}
+```
+
+**Dangerous.** Uninstalling a package removes its database tables, chunks, snippets, plugins, and other elements. This is destructive and cannot be undone without a backup.
