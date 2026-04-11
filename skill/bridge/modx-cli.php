@@ -72,12 +72,24 @@ if (!is_array($cmd) || !isset($cmd['action'])) {
 // ---------------------------------------------------------------------------
 $action = $cmd['action'];
 
+// Capture any stdout leaked by MODX log calls (e.g. modTransportProvider's
+// $_SESSION warning fired by package_* processors). The MODX log target is
+// 'ECHO' for compatibility with the rest of the bridge, but JSON-on-stdout
+// must not be polluted by stray log lines.
+ob_start();
 try {
     $result = dispatch($modx, $action, $cmd);
 } catch (\Throwable $e) {
+    ob_end_clean();
     $result = ['error' => $e->getMessage(), 'type' => get_class($e), 'file' => $e->getFile(), 'line' => $e->getLine()];
     fwrite(STDOUT, json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
     exit(3);
+}
+$leakedStdout = ob_get_clean();
+// If the dispatcher returned an array and there is leaked log output, attach
+// it under `_log` so callers that care can inspect it without it breaking JSON.
+if (is_array($result) && $leakedStdout !== '' && trim($leakedStdout) !== '') {
+    $result['_log'] = trim($leakedStdout);
 }
 
 echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
@@ -582,17 +594,56 @@ function dispatch(\MODX\Revolution\modX $modx, string $action, array $cmd)
             ];
 
         case 'package_update':
+            // The MODX core `Workspace/Packages/Update` processor only updates
+            // metadata - it does NOT download and install a newer version.
+            // To actually upgrade a package we have to:
+            //   1. Check for available updates
+            //   2. Download the new transport zip via Rest/Download
+            //   3. Install it via Workspace/Packages/Install
             if (empty($cmd['signature'])) return ['error' => 'missing signature'];
             $modx->initialize('mgr');
-            $response = $modx->runProcessor('Workspace/Packages/Update', [
+
+            // Step 1: find the available update info URL
+            $checkResponse = $modx->runProcessor('Workspace/Packages/CheckForUpdates', [
                 'signature' => $cmd['signature'],
             ]);
-            $result = $response->getResponse();
-            if (is_string($result)) $result = json_decode($result, true);
+            $checkResult = $checkResponse->getResponse();
+            if (is_string($checkResult)) $checkResult = json_decode($checkResult, true);
+            if (empty($checkResult['object'])) {
+                return ['ok' => true, 'message' => 'already up to date', 'up_to_date' => true];
+            }
+            $latest = $checkResult['object'][0] ?? null;
+            if (empty($latest) || empty($latest['info'])) {
+                return ['error' => 'update found but no info URL', 'check_result' => $checkResult];
+            }
+
+            // Step 2: download
+            $dlResponse = $modx->runProcessor('Workspace/Packages/Rest/Download', [
+                'info'     => $latest['info'],
+                'provider' => 1,
+            ]);
+            $dlResult = $dlResponse->getResponse();
+            if (is_string($dlResult)) $dlResult = json_decode($dlResult, true);
+            if (empty($dlResult['success'])) {
+                return ['error' => 'download failed', 'details' => $dlResult['message'] ?? '', 'raw' => $dlResult];
+            }
+            $newSignature = $dlResult['object']['signature'] ?? $latest['signature'] ?? '';
+            if (empty($newSignature)) {
+                return ['error' => 'could not determine new signature after download'];
+            }
+
+            // Step 3: install
+            $instResponse = $modx->runProcessor('Workspace/Packages/Install', [
+                'signature' => $newSignature,
+            ]);
+            $instResult = $instResponse->getResponse();
+            if (is_string($instResult)) $instResult = json_decode($instResult, true);
+
             return [
-                'ok'      => !empty($result['success']),
-                'message' => $result['message'] ?? '',
-                'object'  => $result['object'] ?? null,
+                'ok'           => !empty($instResult['success']),
+                'old_signature' => $cmd['signature'],
+                'new_signature' => $newSignature,
+                'message'      => $instResult['message'] ?? '',
             ];
 
         case 'package_uninstall':
